@@ -1,0 +1,13 @@
+# The server's own runtime state, written wherever it was started. It is a world
+# and a player list, not source: the edits, signs, containers and inventories of
+# whoever was playing. The server writes them beside the working directory, so a
+# run from the repository root leaves them here.
+/world.json
+/signs.json
+/containers.json
+/players.json
+
+# Built binaries and logs.
+/mcgo
+/server
+*.log
