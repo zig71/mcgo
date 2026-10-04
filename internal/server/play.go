@@ -481,6 +481,11 @@ func (s *session) handlePlayerAction(r *mcproto.Reader) {
 		s.endDig()
 		return
 	}
+	if status == 5 {
+		// RELEASE_USE_ITEM: letting go of what was being drawn — a bow's shot.
+		s.releaseBow()
+		return
+	}
 	if status != 3 {
 		// A drop, a swap: not a break.
 		return
@@ -555,6 +560,14 @@ func (s *session) handleUseItem(r *mcproto.Reader) {
 	}
 	held := s.mainHandItem()
 	if held.Empty() {
+		return
+	}
+	// A bow begins drawing here and fires on the release, which arrives as its
+	// own action. The tick the draw started is what decides how hard the shot
+	// is, so it is kept until then.
+	if s.t.ItemName[held.ID] == "minecraft:bow" {
+		s.bowDrawing = true
+		s.bowDraw = s.srv.Age()
 		return
 	}
 	s.throwItem(held.ID)

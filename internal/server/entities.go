@@ -55,6 +55,9 @@ type Entity struct {
 	// Owner is the entity that threw a projectile, which is what its first two
 	// ticks ignore and what an ender pearl teleports.
 	Owner int32
+	// Arrow marks a projectile that is an arrow: heavier, and it hurts what it
+	// hits rather than bursting.
+	Arrow bool
 	// Item is the stack a dropped item carries, and Age counts its ticks for
 	// despawning.
 	Item world.Item

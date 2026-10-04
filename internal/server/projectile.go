@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"math"
+	"math/rand/v2"
 
 	"mcgo/internal/mcproto"
 	"mcgo/internal/proto"
@@ -55,8 +56,13 @@ const eyeHeight = 1.62
 
 // projectileReach is how close a projectile has to pass to an entity's centre to
 // count as hitting it. The real test is the two bounding boxes overlapping; this
-// is that, rounded — the projectile is a point and the entity a small cube.
+// is that, rounded — the projectile is a point and the entity as wide as one
+// block.
 const projectileReach = 0.7
+
+// entityHeight is how tall an entity is taken to be for a projectile's sake.
+// Two blocks covers every mob this server spawns and the player's own body.
+const entityHeight = 2.0
 
 // throwItem throws what is in hand, and reports whether the item was something
 // throwable at all, so the caller can go on to what else using it means.
@@ -91,10 +97,140 @@ func (s *session) throwItem(itemID int32) bool {
 	return true
 }
 
+// arrowGravity is an arrow's gravity, which is heavier than a thrown thing's
+// (ThrowableProjectile's 0.03 against AbstractArrow's 0.05). The drag is the
+// same 0.99.
+const arrowGravity = 0.05
+
+// arrowBaseDamage is AbstractArrow's base damage for a plain arrow: the shot's
+// speed times this is what it does to what it hits.
+const arrowBaseDamage = 2.0
+
+// bowPower is BowItem.getPowerForTime: how far a draw of this many ticks has
+// come, from nothing to one. The curve is the game's own, which is why a
+// half-drawn bow is much weaker than half strength.
+func bowPower(ticks int64) float32 {
+	pow := float32(ticks) / 20
+	pow = (pow*pow + 2*pow) / 3
+	if pow > 1 {
+		pow = 1
+	}
+	return pow
+}
+
+// releaseBow fires the bow that use_item started drawing. Vanilla's numbers:
+// the shot leaves at three times the charge, the spread is a gaussian of
+// 0.0172275 per axis (Projectile.shoot's uncertainty), and a draw under a tenth
+// of the way does not fire at all.
+//
+// What is missing from the whole picture: an arrow that hits a block vanishes
+// rather than sticking, it cannot be picked up again, it never crits, and it
+// cannot hit a player — this server's projectiles look for mobs and items, not
+// sessions.
+func (s *session) releaseBow() {
+	draw, drawing := s.bowDraw, s.bowDrawing
+	s.bowDrawing = false
+	s.bowDraw = 0
+	// The bow has to still be in hand: switching to something else mid-draw
+	// cancels the shot.
+	if !drawing || s.t.ItemName[s.mainHandItem().ID] != "minecraft:bow" {
+		return
+	}
+	pow := bowPower(s.srv.Age() - draw)
+	if pow < 0.1 {
+		return
+	}
+	typeID, ok := s.t.EntityIDs["minecraft:arrow"]
+	if !ok {
+		return
+	}
+	if !s.takeArrow() {
+		return
+	}
+	yaw, pitch := float64(s.yaw)*math.Pi/180, float64(s.pitch)*math.Pi/180
+	dx := -math.Sin(yaw) * math.Cos(pitch)
+	dy := -math.Sin(pitch)
+	dz := math.Cos(yaw) * math.Cos(pitch)
+	spread := 0.0172275
+	dx += rand.NormFloat64() * spread
+	dy += rand.NormFloat64() * spread
+	dz += rand.NormFloat64() * spread
+	if l := math.Sqrt(dx*dx + dy*dy + dz*dz); l > 1e-6 {
+		dx, dy, dz = dx/l, dy/l, dz/l
+	}
+	speed := float64(pow) * 3.0
+
+	e := s.srv.spawnEntity(kindProjectile, typeID, s.posX, s.posY+eyeHeight, s.posZ)
+	e.Owner = s.entityID
+	e.Arrow = true
+	e.VX, e.VY, e.VZ = dx*speed, dy*speed, dz*speed
+	e.Yaw, e.LastYaw = s.yaw, s.yaw
+	if id, ok := s.t.SoundEventIDs["minecraft:entity.arrow.shoot"]; ok {
+		s.srv.playSound(s.t, id, soundSourcePlayers, float32(s.posX), float32(s.posY), float32(s.posZ), 1, 1)
+	}
+}
+
+// takeArrow spends one arrow from the inventory, or reports that the shot can
+// go ahead without one because the player is in creative. Vanilla takes the
+// first arrow it finds of any kind; with no item data here, that is a plain
+// arrow and then a tipped one.
+func (s *session) takeArrow() bool {
+	if s.gameMode == gameModeCreative {
+		return true
+	}
+	for _, want := range []string{"minecraft:arrow", "minecraft:tipped_arrow"} {
+		id, ok := s.t.ItemIDs[want]
+		if !ok {
+			continue
+		}
+		for i := range s.inv {
+			if s.inv[i].ID != id || s.inv[i].Count <= 0 {
+				continue
+			}
+			s.inv[i].Count--
+			if s.inv[i].Count <= 0 {
+				s.inv[i] = world.Item{}
+			}
+			s.sendSlot(invWindowSlot(i), s.inv[i])
+			return true
+		}
+	}
+	return false
+}
+
+// invWindowSlot is where an inventory slot sits in the player's window: the
+// hotbar is 36-44 and the main inventory 9-35.
+func invWindowSlot(i int) int32 {
+	if i >= 27 {
+		return int32(36 + i - 27)
+	}
+	return int32(9 + i)
+}
+
+// arrowHit is what an arrow does to the mob it stopped in: it hurts it by the
+// shot's speed times the arrow's base damage. The hurt goes through the mob's
+// own path, so it flashes, makes its hurt sound and is knocked back the way a
+// punch does. The arrow is spent doing it — it does not stick in anything, and
+// nothing can pick it up again.
+func (s *Server) arrowHit(t proto.Tables, e *Entity, other *Entity, x, y, z float64) {
+	if other.Kind == kindMob {
+		speed := math.Sqrt(e.VX*e.VX + e.VY*e.VY + e.VZ*e.VZ)
+		s.hurtMob(t, other, float32(math.Ceil(speed*arrowBaseDamage)), s.sessionByEntityID(e.Owner))
+	}
+	if id, ok := t.SoundEventIDs["minecraft:entity.arrow.hit"]; ok {
+		s.playSound(t, id, soundSourcePlayers, float32(x), float32(y), float32(z), 1, 1)
+	}
+	s.removeEntity(e.ID)
+}
+
 // stepProjectile is one tick of a thrown thing: gravity, drag, then a swept move
 // that stops at the first block or entity in the way.
 func (s *Server) stepProjectile(t proto.Tables, w *world.World, e *Entity) {
-	e.VY -= projectileGravity
+	gravity := projectileGravity
+	if e.Arrow {
+		gravity = arrowGravity
+	}
+	e.VY -= gravity
 	e.VX *= projectileDrag
 	e.VY *= projectileDrag
 	e.VZ *= projectileDrag
@@ -124,6 +260,10 @@ func (s *Server) stepProjectile(t proto.Tables, w *world.World, e *Entity) {
 			return
 		}
 		if other := s.projectileHit(t, nx, ny, nz, e, hitOwner); other != nil {
+			if e.Arrow {
+				s.arrowHit(t, e, other, nx, ny, nz)
+				return
+			}
 			s.burstProjectile(t, e, other.X, other.Y, other.Z)
 			return
 		}
@@ -134,6 +274,11 @@ func (s *Server) stepProjectile(t proto.Tables, w *world.World, e *Entity) {
 
 // projectileHit is the first entity the projectile's position is inside, leaving
 // out itself and — for the first ticks — whoever threw it.
+//
+// Horizontally this is a distance from the entity's centre, which is the box it
+// really is, rounded. Vertically it is a range from the feet up: without that a
+// level shot at eye height passed clean *over* every mob, because an entity was
+// being treated as a point at its feet rather than as something two blocks tall.
 func (s *Server) projectileHit(t proto.Tables, x, y, z float64, self *Entity, hitOwner bool) *Entity {
 	for _, other := range s.entities() {
 		if other.ID == self.ID {
@@ -142,7 +287,10 @@ func (s *Server) projectileHit(t proto.Tables, x, y, z float64, self *Entity, hi
 		if !hitOwner && other.ID == self.Owner {
 			continue
 		}
-		if math.Abs(other.X-x) > projectileReach || math.Abs(other.Y+0.5-y) > projectileReach || math.Abs(other.Z-z) > projectileReach {
+		if math.Abs(other.X-x) > projectileReach || math.Abs(other.Z-z) > projectileReach {
+			continue
+		}
+		if y < other.Y || y > other.Y+entityHeight {
 			continue
 		}
 		return other

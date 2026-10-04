@@ -117,6 +117,10 @@ const soundSourceHostile = 5
 // sound and the rest of the world's own noise belong.
 const soundSourceNeutral = 6
 
+// soundSourcePlayers is SoundSource.PLAYERS, which is the channel for what a
+// player's own gear does: a bow's shot, an arrow's impact.
+const soundSourcePlayers = 7
+
 // playMobSoundFrom is playMobSound bound to the mob: the client keeps the sound
 // with the entity, so a mob that walks away takes its noise with it. Vanilla
 // sends a mob's own noises this way; a positional sound is for things that stay

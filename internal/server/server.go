@@ -548,6 +548,12 @@ type session struct {
 	digStart  int64
 	digDir    int32
 	digStage  int32
+	// bowDrawing is whether a bow is being drawn, and bowDraw the tick it
+	// started: the release turns the two into the shot's strength. A bool
+	// rather than a zero tick, because the world age *is* zero when a server
+	// starts, so "started at 0" and "not drawing" would be the same value.
+	bowDrawing bool
+	bowDraw    int64
 
 	// spawnX/Y/Z is where a respawn puts the player.
 	spawnX, spawnY, spawnZ float64

@@ -396,6 +396,15 @@ hidden.
   sends. An ender pearl carries its thrower to where it landed and costs them
   five damage in survival; the thrower is ignored for the throw's first two
   ticks, so a level throw does not end where it began.
+- **Bows and arrows**: the draw starts on `use_item` and the shot comes on the
+  release — `player_action` action 5, which this server previously ignored — on
+  `BowItem`'s own charge curve: twenty ticks to full, a minimum of a tenth of the
+  way, and the arrow leaving at three blocks a tick. One arrow is spent from the
+  inventory (a tipped arrow counts, creative needs none), and the shot carries
+  vanilla's per-axis gaussian spread. An arrow falls at 0.05 a tick against a
+  thrown thing's 0.03, and hurts what it hits by its speed times the arrow's base
+  damage, through the mob's own hurt path — so the target flashes, makes its
+  sound and is knocked back the way a punch does it.
 
 **Approximations**
 - A pickup is a **distance test**, not the player's box touching the item's.
@@ -407,7 +416,13 @@ hidden.
   against box, and it does not slow in water (`ThrowableProjectile` drags at 0.8
   there). A thrown thing has no lifetime either: vanilla's has none, so one that
   never hits anything flies until it leaves the world and is dropped at the
-  bottom of it.
+  bottom of it. A projectile's *target* test is a distance from the entity's
+  centre horizontally and any height between its feet and two blocks above them
+  — the first version treated an entity as a point at its feet, which sent every
+  level shot clean over a mob's head.
+- An arrow **does not stick**: it is spent where it lands, cannot be picked up
+  again, never crits, and cannot hit a player, because this server's projectiles
+  look for mobs and dropped items rather than for sessions.
 - A mob's walk is a **random direction on a timer**, not a path or a goal; its
   speed is one number for every mob rather than per-mob movement attributes.
 - **Entity tracking is a distance** (64 blocks), not vanilla's per-chunk

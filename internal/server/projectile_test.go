@@ -148,3 +148,105 @@ func TestAnEnderPearlTakesItsThrower(t *testing.T) {
 		t.Errorf("health is %v after a pearl, want less than %v", s.health, health)
 	}
 }
+
+// A bow draws for twenty ticks to full charge and fires at three blocks a tick,
+// on BowItem's curve: the charge is ((t/20)^2 + 2t/20) / 3, so twenty ticks is
+// one and three blocks a tick, and a draw under a tenth of the way does not fire
+// at all.
+func TestDrawingABow(t *testing.T) {
+	srv, s, _, tab := thrownServer(t, "minecraft:bow", 1)
+	arrow, ok := tab.ItemIDs["minecraft:arrow"]
+	if !ok {
+		t.Fatal("no arrow item")
+	}
+	s.inv[28] = world.Item{ID: arrow, Count: 5}
+
+	// Two ticks in: below a tenth, so no shot and no arrow spent.
+	s.handleUseItem(mcproto.NewReader(useItemPacket()))
+	if !s.bowDrawing {
+		t.Fatal("the draw did not start")
+	}
+	srv.age.Add(2)
+	s.handlePlayerAction(actionPacket(5, 0, 65, 0, 1, 9))
+	if e := thrown(srv); e != nil {
+		t.Errorf("a two-tick draw fired an arrow at (%v,%v,%v)", e.X, e.Y, e.Z)
+	}
+	if s.inv[28].Count != 5 {
+		t.Errorf("the abandoned draw spent an arrow: %d left", s.inv[28].Count)
+	}
+
+	// A full draw: three blocks a tick, down the look vector, one arrow gone.
+	s.handleUseItem(mcproto.NewReader(useItemPacket()))
+	srv.age.Add(20)
+	s.handlePlayerAction(actionPacket(5, 0, 65, 0, 1, 10))
+	e := thrown(srv)
+	if e == nil || !e.Arrow {
+		t.Fatal("a full draw fired no arrow")
+	}
+	if got := proto.EntityTypeName(tab, e.Type); got != "minecraft:arrow" {
+		t.Errorf("the fired entity is %q, want an arrow", got)
+	}
+	speed := math.Sqrt(e.VX*e.VX + e.VY*e.VY + e.VZ*e.VZ)
+	if math.Abs(speed-3) > 0.2 {
+		t.Errorf("the shot leaves at %v, want 3", speed)
+	}
+	if e.VZ < 0.9*speed {
+		t.Errorf("the shot went somewhere else: (%v,%v,%v)", e.VX, e.VY, e.VZ)
+	}
+	if s.inv[28].Count != 4 {
+		t.Errorf("the stack holds %d after the shot, want 4", s.inv[28].Count)
+	}
+}
+
+// A bow with nothing to shoot does not fire; a bow in creative does.
+func TestABowNeedsAnArrow(t *testing.T) {
+	srv, s, _, _ := thrownServer(t, "minecraft:bow", 1)
+	s.handleUseItem(mcproto.NewReader(useItemPacket()))
+	srv.age.Add(20)
+	s.handlePlayerAction(actionPacket(5, 0, 65, 0, 1, 9))
+	if e := thrown(srv); e != nil {
+		t.Error("a bow with no arrows fired one anyway")
+	}
+
+	if err := s.setGameMode(gameModeCreative); err != nil {
+		t.Fatalf("changing mode: %v", err)
+	}
+	s.handleUseItem(mcproto.NewReader(useItemPacket()))
+	srv.age.Add(20)
+	s.handlePlayerAction(actionPacket(5, 0, 65, 0, 1, 10))
+	if thrown(srv) == nil {
+		t.Error("creative fired nothing")
+	}
+}
+
+// An arrow spends itself in the mob it hits and hurts it by the shot's speed
+// times the arrow's base damage. A level shot at eye height reaches a mob
+// standing on the same ground, which is why an entity is a box and not a point:
+// the first version of this test had the arrow sail over the zombie's head.
+func TestAnArrowHurtsWhatItHits(t *testing.T) {
+	srv, s, _, tab := thrownServer(t, "minecraft:bow", 1)
+	arrow, ok := tab.ItemIDs["minecraft:arrow"]
+	if !ok {
+		t.Fatal("no arrow item")
+	}
+	s.inv[28] = world.Item{ID: arrow, Count: 1}
+	zombie := srv.spawnEntity(kindMob, tab.EntityIDs["minecraft:zombie"], 0.5, 65, 3.5)
+	full := mobHealthFor(tab, zombie.Type)
+
+	s.handleUseItem(mcproto.NewReader(useItemPacket()))
+	srv.age.Add(20)
+	s.handlePlayerAction(actionPacket(5, 0, 65, 0, 1, 9))
+	if thrown(srv) == nil {
+		t.Fatal("the shot did not fire")
+	}
+	for range 5 {
+		srv.tickEntities()
+	}
+
+	if zombie.Health >= full {
+		t.Errorf("the arrow left the zombie at %v, want less than %v", zombie.Health, full)
+	}
+	if e := thrown(srv); e != nil {
+		t.Errorf("the arrow is still flying at (%v,%v,%v)", e.X, e.Y, e.Z)
+	}
+}
