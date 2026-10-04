@@ -137,6 +137,7 @@ type Tables struct {
 	PlayClientboundSetHealth           int32
 	PlayClientboundDamageEvent         int32
 	PlayClientboundEntityEvent         int32
+	PlayClientboundLevelParticles      int32
 	PlayClientboundExplode             int32
 	PlayClientboundUpdateRecipes       int32
 	PlayClientboundRecipeBookAdd       int32

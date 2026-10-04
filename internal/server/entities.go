@@ -217,6 +217,45 @@ func (s *Server) levelEvent(t proto.Tables, x, y, z int32, event int32, data int
 	})
 }
 
+// levelParticles tells clients to draw a burst of particles at a position. It is
+// the one particle mechanism nothing else here can stand in for: an explosion's
+// smoke rides inside the Explode packet, a snowball's puff is entity event 3, a
+// block's break and the water-and-lava fizz are level events 2001 and 1501.
+//
+// The packet's shape is the modern one — the particle, two booleans, the centre,
+// a spread per axis, a maximum speed per axis, a count, then a randomization
+// mode (0 default, 1 alternative, 2 alternative-with-speed). A built-in particle
+// like this one is written as its registry id and nothing else.
+func (s *Server) levelParticles(t proto.Tables, particle string, x, y, z float64,
+	xDist, yDist, zDist, speed float32, count int32) {
+	id, ok := t.ParticleTypeIDs[particle]
+	if !ok || t.PlayClientboundLevelParticles == 0 {
+		return
+	}
+	var w mcproto.Writer
+	w.WriteVarInt(id)
+	w.WriteBool(false) // do not override the client's own particle limit
+	w.WriteBool(false) // and no need to show it from any distance
+	w.WriteDouble(x)
+	w.WriteDouble(y)
+	w.WriteDouble(z)
+	w.WriteFloat(xDist)
+	w.WriteFloat(yDist)
+	w.WriteFloat(zDist)
+	// Speed per axis: sideways only, which is the shape of what vanilla emits
+	// here — each particle gets a gaussian on x and z and nothing on y.
+	w.WriteFloat(speed)
+	w.WriteFloat(0)
+	w.WriteFloat(speed)
+	w.WriteVarInt(count)
+	w.WriteVarInt(2) // ALTERNATIVE_WITH_SPEED
+	body := w.Bytes()
+
+	s.viewersAt(x, y, z, func(sess *session) {
+		_ = sess.sendQuiet(sess.t.PlayClientboundLevelParticles, body)
+	})
+}
+
 // stepEntity is one tick of an entity: gravity, landing, the move that is sent
 // to clients, and whatever the entity does with its time.
 func (s *Server) stepEntity(t proto.Tables, w *world.World, e *Entity) {

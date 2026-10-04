@@ -392,10 +392,18 @@ hidden.
   a fast throw cannot pass through a wall. The packet for it, `use_item`, was
   the one serverbound packet this server did not route at all. A snowball or an
   egg bursts where it hits, drawn from **entity event 3**, which is the puff of
-  particles and its sound in one packet — and the only particles this server
-  sends. An ender pearl carries its thrower to where it landed and costs them
-  five damage in survival; the thrower is ignored for the throw's first two
-  ticks, so a level throw does not end where it began.
+  particles and its sound in one packet. An ender pearl carries its thrower to
+  where it landed and costs them five damage in survival; the thrower is ignored
+  for the throw's first two ticks, so a level throw does not end where it began.
+  - Where particles come from, all told: an explosion's smoke rides inside the
+    **Explode** packet — vanilla's own mechanism, and it was never missing, which
+    is what an earlier note in the ledger got wrong — a snowball's or an egg's
+    puff is **entity event 3**, a block's break and the water-and-lava fizz are
+    **level events 2001 and 1501**, and an ender pearl's landing throws **32
+    portal particles** through the standalone **level_particles** packet. That
+    last one is the only case none of the others could carry, which is why the
+    packet is now generated into `proto.Tables` (48 on 26.3 and 26.2, 41 on
+    1.21.8).
 - **Bows and arrows**: the draw starts on `use_item` and the shot comes on the
   release — `player_action` action 5, which this server previously ignored — on
   `BowItem`'s own charge curve: twenty ticks to full, a minimum of a tenth of the

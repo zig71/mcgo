@@ -304,6 +304,9 @@ func (s *Server) projectileHit(t proto.Tables, x, y, z float64, self *Entity, hi
 func (s *Server) burstProjectile(t proto.Tables, e *Entity, x, y, z float64) {
 	name := proto.EntityTypeName(t, e.Type)
 	if name == "minecraft:ender_pearl" {
+		// The landing throws portal particles, which is what vanilla emits
+		// here: thirty-two of them, spread up the two blocks above the impact.
+		s.levelParticles(t, "minecraft:portal", x, y, z, 0.25, 2.0, 0.25, 0.5, 32)
 		if owner := s.sessionByEntityID(e.Owner); owner != nil {
 			owner.teleportTo(x, y, z)
 			// The pearl's own damage type, which is what the hurt sound and the

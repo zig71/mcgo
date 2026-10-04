@@ -118,7 +118,7 @@ func TestASnowballBurstsOnABlock(t *testing.T) {
 // out: vanilla ignores the owner for the throw's first two ticks, and without
 // that a level throw would end where it began.
 func TestAnEnderPearlTakesItsThrower(t *testing.T) {
-	srv, s, _, tab := thrownServer(t, "minecraft:ender_pearl", 1)
+	srv, s, log, tab := thrownServer(t, "minecraft:ender_pearl", 1)
 	stone, ok := srv.blockState(tab, "minecraft:stone", nil)
 	if !ok {
 		t.Fatal("no stone block state")
@@ -147,6 +147,9 @@ func TestAnEnderPearlTakesItsThrower(t *testing.T) {
 	if !(s.health < health) {
 		t.Errorf("health is %v after a pearl, want less than %v", s.health, health)
 	}
+	// The landing throws portal particles, which is the one thing here that no
+	// other packet can carry.
+	waitFor(t, log, tab.PlayClientboundLevelParticles)
 }
 
 // A bow draws for twenty ticks to full charge and fires at three blocks a tick,

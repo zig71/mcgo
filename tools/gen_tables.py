@@ -76,6 +76,7 @@ FIELDS = [
     ("PlayServerboundUseItemOn", "play", "serverbound", "use_item_on"),
     ("PlayServerboundUseItem", "play", "serverbound", "use_item"),
     ("PlayClientboundLightUpdate", "play", "clientbound", "light_update"),
+    ("PlayClientboundLevelParticles", "play", "clientbound", "level_particles"),
     ("PlayClientboundSetTime", "play", "clientbound", "set_time"),
     ("PlayServerboundSetCarriedItem", "play", "serverbound", "set_carried_item"),
     ("PlayServerboundBlockEntityTagQuery", "play", "serverbound", "block_entity_tag_query"),
