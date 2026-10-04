@@ -2,12 +2,13 @@
 
 package v772
 
-// LightDampening is empty for this version: its jar does not carry
-// the classes these tables are dumped from, so the server falls
-// back to its hand-written tables.
+import _ "embed"
+
 // LightDampening is the light cost of a step through each block state,
 // indexed by state id: BlockStateBase.getLightDampening from the game
 // itself. LightEngine.getOpacity floors a step at one.
+//
+//go:embed dampening.bin
 var LightDampening []byte
 
 // LightEmission is empty for this version: its jar does not carry

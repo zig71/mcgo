@@ -313,9 +313,22 @@ hidden.
     (`TestLightFlowsIntoAClearedBlock`).
 
 **Missing (light)**
-- **1.21.8 has no table**: that jar's layout is not the one this dump reads, so
-  v772 falls back to opacity plus the fluid rule. Regenerating it needs the
-  1.21.8 jar's inner-jar path worked out.
+- **1.21.8's dampening table is projected, not dumped.** Mojang's bundler ships
+  the 26.x servers with *named* classes and 1.21.8 with obfuscated ones — checked
+  by opening both inner jars: 26.2 has
+  `net/minecraft/world/level/block/state/BlockBehaviour`, 1.21.8 has no
+  `net/minecraft` classes at all — so `DumpLight`, which reads
+  `getLightDampening`, cannot run against it without the official mappings and a
+  remapper, and this machine has neither. The block report cannot answer it
+  either: neither 1.21.8's nor 26.3's carries a light field. So
+  `tools/project_light.py` matches each 1.21.8 state to the 26.3 state with the
+  same block and properties and takes that state's dampening — **27940 of 27946
+  states**, with `minecraft:chain`'s six written as `0xff` and left to the
+  opacity rule. A projection by name, not the game's own numbers: the same
+  technique the fuel tables use for these two versions. Getting the donor and
+  target the wrong way round is silent and poisonous — the first run produced a
+  table indexed by 26.3's ids, which is why the script now says which is which
+  and why the checks below are in place.
 - Emitters used to be **excluded** from the opaque set, which let light pass
   through glowstone; vanilla's rule makes a full-cube emitter cost 15 like any
   other solid block. Removed. An emitter still lights its neighbours, because

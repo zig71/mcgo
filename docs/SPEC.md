@@ -93,6 +93,7 @@ data generator reports. Nothing is hand-copied from documentation.
 | `gen_items.py` | `blocks.json`, `registries.json` | item names/ids, item → block state, container menus, furnace lit states |
 | `gen_recipes.py` | data pack, `registries.json`, item components | cooking recipes, fuel burn times, crafting recipes, craft remainders |
 | `gen_tables.py` | `packets.json` + `version.json` | the `proto.Tables` literal |
+| `project_light.py` | both versions' `blocks.json` + the donor `dampening.bin` | a dampening blob for a version whose classes cannot be dumped |
 
 To reproduce for a version:
 

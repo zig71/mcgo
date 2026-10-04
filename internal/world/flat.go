@@ -124,14 +124,25 @@ func (w *World) Dampening(x, y, z int32) byte {
 	// The generated table is the more precise answer, so it wins: water is in
 	// the opaque table as well (it does dim light), and reading that first made
 	// this report 15 for water.
+	//
+	// 0xff is this table's "no data": a state the table could not be filled in
+	// for — 1.21.8's is projected from 26.3 by block and properties, and 183 of
+	// its blocks have no counterpart there. Those keep the rules below rather
+	// than a guess.
 	if n := int(state); n >= 0 && n < len(w.flat.cfg.LightDampening) {
-		return w.flat.cfg.LightDampening[n]
+		if d := w.flat.cfg.LightDampening[n]; d != lightNoData {
+			return d
+		}
 	}
 	if w.Opaque(x, y, z) {
 		return 15
 	}
 	return 0
 }
+
+// lightNoData is what a projected dampening table writes for a state it could
+// not fill in. No dampening can be 255, so it cannot collide with a real answer.
+const lightNoData = 0xFF
 
 // Opaque reports whether a block stops light, implementing LightEnv. Anything
 // the table does not name is treated as opaque, since most blocks are.
